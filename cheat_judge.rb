@@ -1,20 +1,19 @@
+KEY_WORDS = %w[include define main std auto double map set list queue stack int integer struct break else long switch case enum register typedef char extern return union const float short unsigned continue for signed void default goto sizeof volatile do if while static final class public protected private boolean extends interface abstract implements import assert byte new try throw catch finally float instanceof super package strictfp this throws transient each next def elif elsif except unless in is not or and raise with yield from virtual inline static_cast mutable using namespace explicit operator template const_cast wchar_t friend delete reinterpret_cast print printf println cin cout].freeze
 
-  KEY_WORDS = %w[include define auto double map set list queue stack int integer struct break else long switch case enum register typedef char extern return union const float short unsigned continue for signed void default goto sizeof volatile do if while static final class public protected private boolean extends interface abstract implements import assert byte new try throw catch finally float instanceof super package strictfp this throws transient each next def elif elsif except unless in is not or and raise with yield from virtual inline static_cast mutable using namespace explicit operator template const_cast wchar_t friend delete reinterpret_cast].freeze
-
-  def cheat_judge(submissions) # we need an array for submissions each with source_code
+  def cheat_judge(submissions, k, w)
     source_code_list = []
     submissions.each do |submission|
       source_code_list << submission.source_code
     end
-    matrix = get_code_similarity get_code_fingerprints source_code_list
-    puts matrix.inspect
+    matrix = get_code_similarity get_code_fingerprints(source_code_list, k, w)
+    matrix
   end
 
   def get_code_similarity(fingerprints)
     len = fingerprints.length
     matrix = Array.new(len) { Array.new(len, 0) }
     (0...len).each do |i|
-      matrix[i][i] = '100.00%'
+      matrix[i][i] = '-'
       ((i + 1)...len).each do |j|
         common_count = find_match_count(fingerprints[i], fingerprints[j])
         matrix[i][j] = format('%0.2f%', common_count.to_d / fingerprints[i].length * 100)
@@ -24,23 +23,29 @@
     matrix
   end
 
-  def get_code_fingerprints(source_list)
+  def get_code_fingerprints(source_list, k_value, w_value)
     return {} unless source_list.respond_to? :map
     fp_arr = []
     source_list.map do |code|
+      k = k_value.clone
+      w = w_value.clone
       code = code_filter(code)
-      k = code.length > 20 ? 10 : code.length - 1
-      finger_print = winnowing(8, generate_hash(3, generate_k_gram(code, k), k))
+      k = code.length - 1 if code.length <= k
+      k = 1 if k < 1
+      w = 1 if w < 1
+      finger_print = winnowing(w, generate_hash(3, generate_k_gram(code, k), k))
       fp_arr << finger_print
     end
     fp_arr
   end
 
   def code_filter(code)
+    return [] if code.blank?
     code = code.downcase
     code = code.gsub(/#.*\n/, '')
     code = code.gsub(%r{\/\/.*\n}, '')
     code = code.gsub(%r{\/\*.*\*\/}, '')
+    code = code.gsub(%r{(=|\+|-|\*|\/|\?|\^|\*\*|:|!|>>|<<)}) { |m| " #{m} " }
     code = code.gsub(/[{}\[\]\|&(),:;\n\r]/, ' ')
     array = code.split(' ')
     array.map! do |item|
@@ -107,12 +112,15 @@
 
   def find_match_count(hash_a, hash_b)
     return find_match_count(hash_b, hash_a) if hash_a.length > hash_b.length
-    count = 0
+    count = 0.0
     hash_a.each do |key, value|
       if hash_b.key? key
-        count += 1 if hash_b[key] == value
+        if hash_b[key] == value
+          count += 1
+          next
+        end
       end
+      count += 0.5 if hash_b.value? value
     end
     count
   end
-
